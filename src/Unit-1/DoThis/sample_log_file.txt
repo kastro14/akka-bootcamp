@@ -54,3 +54,5 @@ and something more
 exit
 
 still works
+
+yup, it still works after the refactoring
