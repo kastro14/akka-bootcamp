@@ -52,3 +52,5 @@ lj1090.inktomisearch.com - - [07/Mar/2004:17:18:41 -0800] "GET /twiki/bin/view/M
 adding stuff
 and something more
 exit
+
+still works
