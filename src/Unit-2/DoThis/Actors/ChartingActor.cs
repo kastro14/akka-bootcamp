@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Windows.Forms;
 using System.Windows.Forms.DataVisualization.Charting;
 using Akka.Actor;
 
@@ -50,24 +51,25 @@ namespace ChartApp.Actors
             public string SeriesName { get; private set; }
         }
 
+        public class TogglePause { }
+
         #endregion
 
         private readonly Chart _chart;
         private Dictionary<string, Series> _seriesIndex;
+        private readonly Button _pauseButton;
 
-        public ChartingActor(Chart chart) : this(chart, new Dictionary<string, Series>())
+        public ChartingActor(Chart chart, Button pauseButton) :
+            this(chart, new Dictionary<string, Series>(), pauseButton)
         {
         }
 
-        public ChartingActor(Chart chart, Dictionary<string, Series> seriesIndex)
+        public ChartingActor(Chart chart, Dictionary<string, Series> seriesIndex, Button pauseButton)
         {
             _chart = chart;
             _seriesIndex = seriesIndex;
-
-            Receive<InitializeChart>(ic => HandleInitialize(ic));
-            Receive<AddSeries>(addSeries => HandleAddSeries(addSeries));
-            Receive<RemoveSeries>(removeSeries => HandleRemoveSeries(removeSeries));
-            Receive<Metric>(metric => HandleMetrics(metric));
+            _pauseButton = pauseButton;
+            Charting();
         }
 
         #region Individual Message Type Handlers
@@ -139,7 +141,50 @@ namespace ChartApp.Actors
             }
         }
 
+        private void HandleMetricsPaused(Metric metric)
+        {
+            if (!string.IsNullOrEmpty(metric.Series)
+                && _seriesIndex.ContainsKey(metric.Series))
+            {
+                var series = _seriesIndex[metric.Series];
+                // set the Y value to zero when we're paused
+                series.Points.AddXY(xPosCounter++, 0.0d);
+                while (series.Points.Count > MaxPoints) series.Points.RemoveAt(0);
+                SetChartBoundaries();
+            }
+        }
+
         #endregion
+
+        private void Charting()
+        {
+            Receive<InitializeChart>(ic => HandleInitialize(ic));
+            Receive<AddSeries>(addSeries => HandleAddSeries(addSeries));
+            Receive<RemoveSeries>(removeSeries => HandleRemoveSeries(removeSeries));
+            Receive<Metric>(metric => HandleMetrics(metric));
+
+            //new receive handler for the TogglePause message type
+            Receive<TogglePause>(pause =>
+            {
+                SetPauseButtonText(true);
+                BecomeStacked(Paused);
+            });
+        }
+
+        private void SetPauseButtonText(bool paused)
+        {
+            _pauseButton.Text = $"{(!paused ? "PAUSE ||" : "RESUME ->")}";
+        }
+
+        private void Paused()
+        {
+            Receive<Metric>(metric => HandleMetricsPaused(metric));
+            Receive<TogglePause>(pause =>
+            {
+                SetPauseButtonText(false);
+                UnbecomeStacked();
+            });
+        }
 
         private void SetChartBoundaries()
         {
